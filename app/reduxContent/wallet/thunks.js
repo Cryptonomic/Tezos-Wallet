@@ -74,7 +74,10 @@ const { createWallet } = TezosFileWallet;
 
 const { getAccount } = TezosConseilClient;
 
-const { sendIdentityActivationOperation } = TezosNodeWriter;
+const {
+  sendIdentityActivationOperation,
+  sendKeyRevealOperation
+} = TezosNodeWriter;
 let currentAccountRefreshInterval = null;
 
 export function goHomeAndClearState() {
@@ -271,8 +274,30 @@ export function syncWallet() {
 
     const syncIdentities = await Promise.all(
       (stateIdentities || []).map(async identity => {
-        const { publicKeyHash } = identity;
-
+        const { publicKeyHash, publicKey, privateKey } = identity;
+        const { url } = getSelectedNode(settings, TEZOS);
+        // todo: we will add isReveal field to the store later.
+        const isReveal = await TezosNodeReader.isManagerKeyRevealedForAccount(
+          url,
+          publicKeyHash
+        ).catch(err => {
+          console.log('isreveal error---', err);
+          return false;
+        });
+        if (!isReveal) {
+          let keyStore = {
+            publicKey,
+            privateKey,
+            publicKeyHash
+          };
+          let userDerivation = '';
+          if (isLedger) {
+            const { derivation } = getCurrentPath(settings);
+            userDerivation = derivation;
+            keyStore = { ...keyStore, storeType: 2 };
+          }
+          await sendKeyRevealOperation(url, keyStore, 1270, userDerivation);
+        }
         const syncIdentity = await getSyncIdentity(
           stateIdentities,
           identity,
@@ -584,20 +609,17 @@ export function getIsReveal(selectedAccountHash, selectedParentHash) {
       .wallet.get('identities')
       .toJS();
     const settings = state().settings.toJS();
-    const isLedger = state().wallet.get('isLedger');
-    const keyStore = getSelectedKeyStore(
+    const { publicKeyHash } = getSelectedKeyStore(
       identities,
       selectedAccountHash,
       selectedParentHash
     );
-    if (isLedger) {
-      keyStore.storeType = 2;
-    }
+
     const { url } = getSelectedNode(settings, TEZOS);
 
     const isReveal = await TezosNodeReader.isManagerKeyRevealedForAccount(
       url,
-      keyStore.publicKeyHash
+      publicKeyHash
     ).catch(err => {
       console.log('isreveal error---', err);
       return false;

@@ -89,13 +89,13 @@ export function originateContract(
       publicKeyHash
     );
     const { url } = getSelectedNode(settings, TEZOS);
-    const userKeyStore = keyStore;
+    let userKeyStore = { ...keyStore };
     let userDerivation = '';
 
     if (isLedger) {
       const { derivation } = getCurrentPath(settings);
       userDerivation = derivation;
-      userKeyStore.storeType = 2;
+      userKeyStore = { ...userKeyStore, storeType: 2 };
     }
 
     let newAddress;
